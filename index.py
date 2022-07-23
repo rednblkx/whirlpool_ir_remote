@@ -28,6 +28,17 @@ kWhirlpoolAcCommandFanSpeed = 0x11
 kWhirlpoolAcCommand6thSense = 0x17
 kWhirlpoolAcCommandOffTimer = 0x1D
 
+
+
+kWhirlpoolAcHdrMark = 8950
+kWhirlpoolAcHdrSpace = 4484
+kWhirlpoolAcBitMark = 597
+kWhirlpoolAcOneSpace = 1649
+kWhirlpoolAcZeroSpace = 533
+kWhirlpoolAcGap = 7920
+kWhirlpoolAcMinGap = 100000; # Just a guess.
+kWhirlpoolAcSections = 3
+
 def xorBytes(code, length):
     code = bytearray(code)
 
@@ -165,6 +176,22 @@ def checksum():
         kWhirlpoolAcChecksumByte2 - kWhirlpoolAcChecksumByte1 - 1)
 
 
+def irCode(headermark, headerspace, onemark, onespace, zeromark, zerospace, footermark, gap, data, nbytes):
+    # Header
+    print(headermark)
+    print(headerspace)
+    # Data
+    for i in range(0, nbytes):
+        if (data[i] & 1):
+            print(onemark)
+            print(onespace)
+        else:
+            print(zeromark)
+            print(zerospace)
+    # data >>= 1
+    # Footer
+    print(footermark)
+    print(gap)
 
 setMode(kWhirlpoolAcCool)
 
@@ -183,3 +210,6 @@ setClock(2,0)
 checksum()
 
 print(bytes(ac))
+
+irCode(kWhirlpoolAcHdrMark, kWhirlpoolAcHdrSpace, kWhirlpoolAcBitMark, kWhirlpoolAcOneSpace, kWhirlpoolAcBitMark, kWhirlpoolAcZeroSpace, kWhirlpoolAcBitMark, kWhirlpoolAcGap, bytes(ac), 6)
+
