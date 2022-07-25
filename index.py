@@ -184,15 +184,15 @@ def setSuper(super):
     Mode = ac.Mode
     if (super):
         setFan(kWhirlpoolAcFanHigh)
-        match Mode:
-            case 0:
-                setTemp(kWhirlpoolAcMaxTemp)
-            case 2:
-                setTemp(kWhirlpoolAcMinTemp)
-                # setMode(kWhirlpoolAcCool)
-            case _:
-                setTemp(kWhirlpoolAcMinTemp)
-                # setMode(kWhirlpoolAcCool)
+        # match Mode:
+        #     case 0:
+        #         setTemp(kWhirlpoolAcMaxTemp)
+        #     case 2:
+        #         setTemp(kWhirlpoolAcMinTemp)
+        #         # setMode(kWhirlpoolAcCool)
+        #     case _:
+        #         setTemp(kWhirlpoolAcMinTemp)
+        #         # setMode(kWhirlpoolAcCool)
         ac.Super1 = 1
         ac.Super2 = 1
     else:
@@ -253,10 +253,6 @@ setClock(now.hour, now.minute)
 setPower(True)
 checksum()
 print(bytes(ac))
-c = BitArray(bytes=bytes(ac))
-l = bytearray(21)
-value = int.from_bytes(ac, byteorder='big')
-
 pulse_array = [kWhirlpoolAcHdrMark, kWhirlpoolAcHdrSpace]
 
 def pulse_codes(dataptr, nbytes, end):
@@ -271,23 +267,25 @@ def pulse_codes(dataptr, nbytes, end):
         result.append(kWhirlpoolAcBitMark)
         result.append(kWhirlpoolAcZeroSpace)
       data >>= 1
-    result.append(kWhirlpoolAcBitMark)
-    result.append(kWhirlpoolAcGap)
+  result.append(kWhirlpoolAcBitMark)
+  result.append(kWhirlpoolAcGap)
   return result
 
 pulse_array.extend(pulse_codes(bytearray(ac), 6, False))
 pulse_array.extend(pulse_codes(bytearray(ac)[6:], 8, False))
 pulse_array.extend(pulse_codes(bytearray(ac)[14:], 7, True))
 
+# print(pulse_array)
+
 # base64_string = base64.b64encode(bytes.fromhex(pulesArrayToBroadlink(pulse_array)))
 
 # print(base64_string)
 
-hex = pulesArrayToBroadlink(pulse_array)
+# hex = pulesArrayToBroadlink(pulse_array)
 
 # Sending the IR command to the Broadlink device.
-device = broadlink.hello('10.0.0.35')  # IP address of your Broadlink device.
+# device = broadlink.hello('10.0.0.35')  # IP address of your Broadlink device.
 
-device.auth()
+# device.auth()
 
 # device.send_data(bytes.fromhex(hex))
