@@ -1,4 +1,5 @@
 import ctypes
+from bitstring import BitArray
 
 # Constants
 kWhirlpoolAcChecksumByte1 = 13
@@ -38,6 +39,10 @@ kWhirlpoolAcZeroSpace = 533
 kWhirlpoolAcGap = 7920
 kWhirlpoolAcMinGap = 100000; # Just a guess.
 kWhirlpoolAcSections = 3
+
+def bitwise_and_bytes(a):
+    result_int = int.from_bytes(a, byteorder="big") & 1
+    return result_int.to_bytes(max(len(a), 1), byteorder="big")
 
 def xorBytes(code, length):
     code = bytearray(code)
@@ -178,19 +183,21 @@ def checksum():
 
 def irCode(headermark, headerspace, onemark, onespace, zeromark, zerospace, footermark, gap, data, nbytes):
     # Header
-    print(headermark)
-    print(headerspace)
+    print(headermark, end=', ')
+    print(headerspace, end=', ')
     # Data
     for i in range(0, nbytes):
-        if (data[i] & 1):
-            print(onemark)
-            print(onespace)
+        # data >>= 1
+        # print(int(data[i]) & 1)
+        if (int(bytes(ac)[i]) & 1):
+            print(onemark, end=', ')
+            print(onespace, end=', ')
         else:
-            print(zeromark)
-            print(zerospace)
+            print(zeromark, end=', ')
+            print(zerospace, end=', ')
     # data >>= 1
     # Footer
-    print(footermark)
+    print(footermark, end=', ')
     print(gap)
 
 setMode(kWhirlpoolAcCool)
@@ -198,18 +205,31 @@ setMode(kWhirlpoolAcCool)
 
 setSwing(False)
 
-setLight(False)
+setLight(True)
 
 
-setPower(False)
 
-setFan(kWhirlpoolAcFanLow)
-setTemp(26)
-setClock(2,0)
+setFan(0)
+setTemp(18)
+setClock(1,22)
+
+setPower(True)
 
 checksum()
 
 print(bytes(ac))
 
-irCode(kWhirlpoolAcHdrMark, kWhirlpoolAcHdrSpace, kWhirlpoolAcBitMark, kWhirlpoolAcOneSpace, kWhirlpoolAcBitMark, kWhirlpoolAcZeroSpace, kWhirlpoolAcBitMark, kWhirlpoolAcGap, bytes(ac), 6)
+
+c = BitArray(bytes=bytes(ac))
+
+l = bytearray(21)
+
+value = int.from_bytes(ac, byteorder='big')
+print(bin(value))
+for i in range(0, 6):
+    value >>= 1
+    print(bin(value))
+# print(c & l)
+
+irCode(kWhirlpoolAcHdrMark, kWhirlpoolAcHdrSpace, kWhirlpoolAcBitMark, kWhirlpoolAcOneSpace, kWhirlpoolAcBitMark, kWhirlpoolAcZeroSpace, kWhirlpoolAcBitMark, kWhirlpoolAcGap, c, 6)
 
