@@ -120,50 +120,67 @@ def pulesArrayToBroadlink(pulesArray):
 class WhirlpoolAC(ctypes.Structure):
     _pack_ = 1
     _fields_ = [
+        # Byte 0~1
         ("pad0", ctypes.c_uint8 * 2),
+        # Byte 2
         ("Fan", ctypes.c_uint8, 2),
         ("Power", ctypes.c_uint8, 1),
         ("Sleep", ctypes.c_uint8, 1),
         ("", ctypes.c_uint8, 3),
         ("Swing1", ctypes.c_uint8, 1),
+        # Byte 3
         ("Mode", ctypes.c_uint8, 3),
         ("", ctypes.c_uint8, 1),
         ("Temp", ctypes.c_uint8, 4),
+        # Byte 4
         ("", ctypes.c_uint8, 8),
+        # Byte 5
         ("", ctypes.c_uint8, 4),
         ("Super1", ctypes.c_uint8, 1),
         ("", ctypes.c_uint8, 2),
         ("Super2", ctypes.c_uint8, 1),
+        # Byte 6
         ("ClockHours", ctypes.c_uint8, 5),
         ("LightOff", ctypes.c_uint8, 1),
         ("", ctypes.c_uint8, 2),
+        # Byte 7
         ("ClockMins", ctypes.c_uint8, 6),
         ("", ctypes.c_uint8, 1),
         ("OffTimerEnabled", ctypes.c_uint8, 1),
+        # Byte 8
         ("OffHours", ctypes.c_uint8, 5),
         ("", ctypes.c_uint8, 1),
         ("Swing2", ctypes.c_uint8, 1),
         ("", ctypes.c_uint8, 1),
+        # Byte 9
         ("OffMins", ctypes.c_uint8, 6),
         ("", ctypes.c_uint8, 1),
         ("OnTimerEnabled", ctypes.c_uint8, 1),
+        # Byte 10
         ("OnHours", ctypes.c_uint8, 5),
         ("", ctypes.c_uint8, 3),
+        # Byte 11
         ("OnMins", ctypes.c_uint8, 6),
         ("", ctypes.c_uint8, 2),
+        # Byte 12
         ("", ctypes.c_uint8, 8),
+        # Byte 13
         ("Sum1", ctypes.c_uint8, 8),
+        # Byte 14
         ("", ctypes.c_uint8, 8),
+        # Byte 15
         ("Cmd", ctypes.c_uint8, 8),
+        # Byte 16~17
         ("pad1", ctypes.c_uint8 * 2),
+        # Byte 18
         ("", ctypes.c_uint8, 3),
         ("J191", ctypes.c_uint8, 1),
         ("", ctypes.c_uint8, 4),
+        # Byte 19
         ("", ctypes.c_uint8, 8),
+        # Byte 20
         ("Sum2", ctypes.c_uint8, 8),
     ]
-
-ac = WhirlpoolAC()
 
 state = bytearray(b'\x83\x06\x00\x00\x00\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
 
@@ -184,15 +201,11 @@ def setSuper(super):
     Mode = ac.Mode
     if (super):
         setFan(kWhirlpoolAcFanHigh)
-        # match Mode:
-        #     case 0:
-        #         setTemp(kWhirlpoolAcMaxTemp)
-        #     case 2:
-        #         setTemp(kWhirlpoolAcMinTemp)
-        #         # setMode(kWhirlpoolAcCool)
-        #     case _:
-        #         setTemp(kWhirlpoolAcMinTemp)
-        #         # setMode(kWhirlpoolAcCool)
+        if Mode == kWhirlpoolAcHeat:
+            setTemp(kWhirlpoolAcMaxTemp)
+        else:
+            setTemp(kWhirlpoolAcMinTemp)
+            setMode(kWhirlpoolAcCool)
         ac.Super1 = 1
         ac.Super2 = 1
     else:
@@ -229,6 +242,9 @@ def setClock(hours, mins):
     ac.ClockHours = hours
     ac.ClockMins = mins
 
+def getClock():
+    return f'{ac.ClockHours}:{ac.ClockMins}'
+
 def setPower(power):
     ac.Power = power
     setSuper(False)  # Changing power cancels Super/Jet mode.
@@ -248,14 +264,13 @@ setMode(kWhirlpoolAcCool)
 setSwing(False)
 setLight(True)
 setFan(0)
-setTemp(18)
+setTemp(21)
 setClock(now.hour, now.minute)
 setPower(True)
 checksum()
-print(bytes(ac))
 pulse_array = [kWhirlpoolAcHdrMark, kWhirlpoolAcHdrSpace]
 
-def pulse_codes(dataptr, nbytes, end):
+def pulse_codes(dataptr, nbytes):
   result = []
   for i in range(nbytes):
     data = dataptr[i]
@@ -271,9 +286,9 @@ def pulse_codes(dataptr, nbytes, end):
   result.append(kWhirlpoolAcGap)
   return result
 
-pulse_array.extend(pulse_codes(bytearray(ac), 6, False))
-pulse_array.extend(pulse_codes(bytearray(ac)[6:], 8, False))
-pulse_array.extend(pulse_codes(bytearray(ac)[14:], 7, True))
+pulse_array.extend(pulse_codes(bytearray(ac), 6))
+pulse_array.extend(pulse_codes(bytearray(ac)[6:], 8))
+pulse_array.extend(pulse_codes(bytearray(ac)[14:], 7))
 
 # print(pulse_array)
 
@@ -281,11 +296,11 @@ pulse_array.extend(pulse_codes(bytearray(ac)[14:], 7, True))
 
 # print(base64_string)
 
-# hex = pulesArrayToBroadlink(pulse_array)
+hex = pulesArrayToBroadlink(pulse_array)
 
 # Sending the IR command to the Broadlink device.
-# device = broadlink.hello('10.0.0.35')  # IP address of your Broadlink device.
+device = broadlink.hello('10.0.0.35')  # IP address of your Broadlink device.
 
-# device.auth()
+device.auth()
 
-# device.send_data(bytes.fromhex(hex))
+device.send_data(bytes.fromhex(hex))
