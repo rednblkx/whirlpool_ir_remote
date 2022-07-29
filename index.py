@@ -18,19 +18,23 @@ kWhirlpoolAcFanMedium = 2
 kWhirlpoolAcFanLow = 3
 kWhirlpoolAcMinTemp = 18     # 18C (DG11J1-3A), 16C (DG11J1-91)
 kWhirlpoolAcMaxTemp = 32     # 32C (DG11J1-3A), 30C (DG11J1-91)
-kWhirlpoolAcAutoTemp = 23    # 23C
+kWhirlpoolAcAutoTemp = 25    # 23C
+kWhirlpoolAcSuperSilent = 0x04
+kWhirlpoolAcAroundU1 = 2
+kWhirlpoolAcAroundU2 = 0x1E
 kWhirlpoolAcCommandLight = 0x00
 kWhirlpoolAcCommandPower = 0x01
 kWhirlpoolAcCommandTemp = 0x02
 kWhirlpoolAcCommandSleep = 0x03
-kWhirlpoolAcCommandSuper = 0x04
+kWhirlpoolAcCommandJet = 0x04
 kWhirlpoolAcCommandOnTimer = 0x05
 kWhirlpoolAcCommandMode = 0x06
 kWhirlpoolAcCommandSwing = 0x07
-kWhirlpoolAcCommandIFeel = 0x0D
 kWhirlpoolAcCommandFanSpeed = 0x11
 kWhirlpoolAcCommand6thSense = 0x17
 kWhirlpoolAcCommandOffTimer = 0x1D
+kWhirlpoolAcCommandSuperSilent = 0x0B
+kWhirlpoolAcCommandAroundU = 0x0D
 
 
 
@@ -126,14 +130,14 @@ class WhirlpoolAC(ctypes.Structure):
         ("Fan", ctypes.c_uint8, 2),
         ("Power", ctypes.c_uint8, 1),
         ("Sleep", ctypes.c_uint8, 1),
-        ("", ctypes.c_uint8, 3),
+        ("AutoTempOffset", ctypes.c_uint8, 3),
         ("Swing1", ctypes.c_uint8, 1),
         # Byte 3
         ("Mode", ctypes.c_uint8, 3),
         ("", ctypes.c_uint8, 1),
         ("Temp", ctypes.c_uint8, 4),
         # Byte 4
-        ("", ctypes.c_uint8, 8),
+        ("Auto6", ctypes.c_uint8, 8),
         # Byte 5
         ("", ctypes.c_uint8, 4),
         ("Super1", ctypes.c_uint8, 1),
@@ -161,13 +165,14 @@ class WhirlpoolAC(ctypes.Structure):
         ("", ctypes.c_uint8, 3),
         # Byte 11
         ("OnMins", ctypes.c_uint8, 6),
-        ("", ctypes.c_uint8, 2),
+        ("AroundU1", ctypes.c_uint8, 2),
         # Byte 12
-        ("", ctypes.c_uint8, 8),
+        ("AroundU2", ctypes.c_uint8, 8),
         # Byte 13
         ("Sum1", ctypes.c_uint8, 8),
         # Byte 14
-        ("", ctypes.c_uint8, 8),
+        ("SleepStars", ctypes.c_uint8, 5),
+        ("SuperSilent", ctypes.c_uint8, 3),
         # Byte 15
         ("Cmd", ctypes.c_uint8, 8),
         # Byte 16~17
@@ -187,58 +192,80 @@ state = bytearray(b'\x83\x06\x00\x00\x00\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00
 ac = WhirlpoolAC.from_buffer_copy(state)
 
 def setTemp(temp):
-    newtemp = min(kWhirlpoolAcMaxTemp, max(kWhirlpoolAcMinTemp, temp))
-    ac.Temp = newtemp - kWhirlpoolAcMinTemp
+    ac.Auto6 = 0
+    if ac.Mode == kWhirlpoolAcAuto:
+        newtemp = min(kWhirlpoolAcMaxTemp, max(kWhirlpoolAcMinTemp, temp))
+        ac.AutoTempOffset = newtemp < kWhirlpoolAcAutoTemp and (kWhirlpoolAcAutoTemp - newtemp) + 5 or newtemp - kWhirlpoolAcAutoTemp
+        ac.Temp = kWhirlpoolAcAutoTemp - kWhirlpoolAcMinTemp
+    else:
+        newtemp = min(kWhirlpoolAcMaxTemp, max(kWhirlpoolAcMinTemp, temp))
+        ac.Temp = newtemp - kWhirlpoolAcMinTemp
+    
     setSuper(False)  # Changing temp cancels Super/Jet mode.
     ac.Cmd = kWhirlpoolAcCommandTemp
 
 def setFan(speed):
+        ac.Auto6 = 0
         ac.Fan = speed
         setSuper(False)  # Changing fan speed cancels Super/Jet mode.
         ac.Cmd = kWhirlpoolAcCommandFanSpeed
 
 def setSuper(super):
-    Mode = ac.Mode
-    if (super):
-        setFan(kWhirlpoolAcFanHigh)
-        if Mode == kWhirlpoolAcHeat:
-            setTemp(kWhirlpoolAcMaxTemp)
+    if not ac.Mode == kWhirlpoolAcAuto:
+        if (super):
+            setFan(kWhirlpoolAcFanHigh)
+            ac.Auto6 = 0
+            if ac.Mode == kWhirlpoolAcHeat:
+                setTemp(kWhirlpoolAcMaxTemp)
+            else:
+                setTemp(kWhirlpoolAcMinTemp)
+                setMode(kWhirlpoolAcCool)
+            ac.Super1 = 1
+            ac.Super2 = 1
         else:
-            setTemp(kWhirlpoolAcMinTemp)
-            setMode(kWhirlpoolAcCool)
-        ac.Super1 = 1
-        ac.Super2 = 1
-    else:
-        ac.Super1 = 0
-        ac.Super2 = 0
-    ac.Cmd = kWhirlpoolAcCommandSuper
+            ac.Auto6 = 0
+            ac.Super1 = 0
+            ac.Super2 = 0
+        ac.Cmd = kWhirlpoolAcCommandJet
+    else: return False
 
-def setSleep(sleep):
-    ac.Sleep = sleep
-    if (sleep): setFan(kWhirlpoolAcFanLow)
-    ac.Cmd = kWhirlpoolAcCommandSleep
+def setSleep(sleep, stars):
+    ac.Auto6 = 0
+    if not ac.Mode == kWhirlpoolAcAuto:
+        ac.Sleep = sleep
+        if sleep: 
+            setFan(kWhirlpoolAcFanLow)
+            ac.SleepStars = max(0, min(4, stars)) * 4
+        ac.Cmd = kWhirlpoolAcCommandSleep
+    else: return False
 
 def setMode(mode):
     setSuper(False)  # Changing mode cancels Super/Jet mode.
     if(mode == kWhirlpoolAcAuto):
+        ac.Mode = kWhirlpoolAcAuto
         setFan(kWhirlpoolAcFanAuto)
         setTemp(kWhirlpoolAcAutoTemp)
         setSleep(False) # Auto mode cancels sleep mode.
+        ac.Auto6 = 0x80
         ac.Cmd = kWhirlpoolAcCommand6thSense
     else:
+        ac.Auto6 = 0
         ac.Mode = mode
         ac.Cmd = kWhirlpoolAcCommandMode
 
 def setSwing(swing):
+    ac.Auto6 = 0
     ac.Swing1 = swing
     ac.Swing2 = swing
     ac.Cmd = kWhirlpoolAcCommandSwing
 
 def setLight(light):
+    ac.Auto6 = 0
     ac.LightOff = not light
     ac.Cmd = kWhirlpoolAcCommandLight
 
 def setClock(hours, mins):
+    ac.Auto6 = 0
     ac.ClockHours = hours
     ac.ClockMins = mins
 
@@ -246,11 +273,20 @@ def getClock():
     return f'{ac.ClockHours}:{ac.ClockMins}'
 
 def setPower(power):
+    ac.Auto6 = 0
     ac.Power = power
     setSuper(False)  # Changing power cancels Super/Jet mode.
     ac.Cmd = kWhirlpoolAcCommandPower
 
+def setSilent(silent):
+    ac.Auto6 = 0
+    if not ac.Mode == kWhirlpoolAcAuto:
+        ac.SuperSilent = kWhirlpoolAcSuperSilent if silent else 0
+        ac.Cmd = kWhirlpoolAcCommandSuperSilent
+    else: return False
+
 def setCommand(cmd):
+    ac.Auto6 = 0
     ac.Cmd = cmd
 
 def checksum():
@@ -259,14 +295,26 @@ def checksum():
     if (21 >= kWhirlpoolAcChecksumByte2):
         ac.Sum2 = xorBytes(bytes(ac)[kWhirlpoolAcChecksumByte1 + 1:],
         kWhirlpoolAcChecksumByte2 - kWhirlpoolAcChecksumByte1 - 1)
+
+def Auto6Offset(offset: int) -> int:
+    if offset > 0:
+        return offset
+    elif offset < 0:
+        return 4 - offset
+
+
 now = datetime.datetime.now()
-setMode(kWhirlpoolAcCool)
-setSwing(False)
 setLight(True)
 setFan(0)
-setTemp(21)
 setClock(now.hour, now.minute)
-setPower(True)
+# setClock(18,36)
+# setMode(kWhirlpoolAcAuto)
+setTemp(24)
+# setPower(True)
+# ac.AutoTempOffset = Auto6Offset(-2)
+# setSuper(True)
+# setMode(kWhirlpoolAcCool)
+# setSwing(True)
 checksum()
 pulse_array = [kWhirlpoolAcHdrMark, kWhirlpoolAcHdrSpace]
 
@@ -292,15 +340,13 @@ pulse_array.extend(pulse_codes(bytearray(ac)[14:], 7))
 
 # print(pulse_array)
 
-# base64_string = base64.b64encode(bytes.fromhex(pulesArrayToBroadlink(pulse_array)))
+# print([hex(bytes(ac)[i]) for i in range(21)])
 
-# print(base64_string)
+# hex = pulesArrayToBroadlink(pulse_array)
 
-hex = pulesArrayToBroadlink(pulse_array)
+# # Sending the IR command to the Broadlink device.
+# device = broadlink.hello('10.0.0.35')  # IP address of your Broadlink device.
 
-# Sending the IR command to the Broadlink device.
-device = broadlink.hello('10.0.0.35')  # IP address of your Broadlink device.
+# device.auth()
 
-device.auth()
-
-device.send_data(bytes.fromhex(hex))
+# device.send_data(bytes.fromhex(hex))
