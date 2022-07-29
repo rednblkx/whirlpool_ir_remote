@@ -187,9 +187,7 @@ class WhirlpoolAC(ctypes.Structure):
         ("Sum2", ctypes.c_uint8, 8),
     ]
 
-state = bytearray(b'\x83\x06\x00\x00\x00\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
-
-ac = WhirlpoolAC.from_buffer_copy(state)
+ac = WhirlpoolAC.from_buffer_copy(bytearray(b'\x83\x06\x00\x00\x00\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'))
 
 def setTemp(temp):
     ac.Auto6 = 0
@@ -318,9 +316,9 @@ setTemp(24)
 checksum()
 pulse_array = [kWhirlpoolAcHdrMark, kWhirlpoolAcHdrSpace]
 
-def pulse_codes(dataptr, nbytes):
+def pulse_codes(dataptr):
   result = []
-  for i in range(nbytes):
+  for i in range(len(dataptr)):
     data = dataptr[i]
     for _ in range(8):
       if (data & 1):
@@ -334,9 +332,9 @@ def pulse_codes(dataptr, nbytes):
   result.append(kWhirlpoolAcGap)
   return result
 
-pulse_array.extend(pulse_codes(bytearray(ac), 6))
-pulse_array.extend(pulse_codes(bytearray(ac)[6:], 8))
-pulse_array.extend(pulse_codes(bytearray(ac)[14:], 7))
+pulse_array.extend(pulse_codes(bytearray(ac)[:6]))
+pulse_array.extend(pulse_codes(bytearray(ac)[6:14]))
+pulse_array.extend(pulse_codes(bytearray(ac)[14:21]))
 
 # print(pulse_array)
 
