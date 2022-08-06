@@ -1,6 +1,6 @@
 import base64
 import ctypes
-from bitstring import BitArray
+from unittest import result
 import broadlink
 import datetime
 
@@ -51,12 +51,10 @@ def bitwise_and_bytes(a):
     result_int = int.from_bytes(a, byteorder="big") & 1
     return result_int.to_bytes(max(len(a), 1), byteorder="big")
 
-def xorBytes(code, length):
-    code = bytearray(code)
+def xorBytes(code):
+    checksum = 0
 
-    checksum = 0x00
-
-    for i in range(0, length):
+    for i in range(len(code)):
         checksum ^= code[i]
 
     return checksum
@@ -73,7 +71,7 @@ def bigEndianToBigLittleDoubleHexByte(bytes):
 def pulesArrayToBroadlink(pulesArray):
     pulse_array.insert(0, 0)
     # clone a copy of the array
-    pulesArray = pulesArray[:]
+    # pulesArray = pulesArray[:]
     # The boarding final command
     broadlinkHexCommand = ''
     # Get the frequency of the command
@@ -288,11 +286,8 @@ def setCommand(cmd):
     ac.Cmd = cmd
 
 def checksum():
-    if (21 >= kWhirlpoolAcChecksumByte1):
-        ac.Sum1 = xorBytes(bytes(ac)[2:], kWhirlpoolAcChecksumByte1 - 1 - 2)
-    if (21 >= kWhirlpoolAcChecksumByte2):
-        ac.Sum2 = xorBytes(bytes(ac)[kWhirlpoolAcChecksumByte1 + 1:],
-        kWhirlpoolAcChecksumByte2 - kWhirlpoolAcChecksumByte1 - 1)
+        ac.Sum1 = xorBytes(bytes(ac)[2:13])
+        ac.Sum2 = xorBytes(bytes(ac)[14:20])
 
 def Auto6Offset(offset: int) -> int:
     if offset > 0:
@@ -304,7 +299,7 @@ def Auto6Offset(offset: int) -> int:
 now = datetime.datetime.now()
 setLight(True)
 setFan(0)
-setClock(now.hour, now.minute)
+setClock(now.hour, 19)
 # setClock(18,36)
 # setMode(kWhirlpoolAcAuto)
 setTemp(24)
@@ -314,29 +309,31 @@ setTemp(24)
 # setMode(kWhirlpoolAcCool)
 # setSwing(True)
 checksum()
+
 pulse_array = [kWhirlpoolAcHdrMark, kWhirlpoolAcHdrSpace]
 
-def pulse_codes(dataptr):
+
+def generate_array(data):
+  sections = [0,6,8]
   result = []
-  for i in range(len(dataptr)):
-    data = dataptr[i]
-    for _ in range(8):
-      if (data & 1):
-        result.append(kWhirlpoolAcBitMark)
-        result.append(kWhirlpoolAcOneSpace)
-      else:
-        result.append(kWhirlpoolAcBitMark)
-        result.append(kWhirlpoolAcZeroSpace)
-      data >>= 1
-  result.append(kWhirlpoolAcBitMark)
-  result.append(kWhirlpoolAcGap)
+  for idx, x in enumerate(sections):
+    state = data[0 if x == 0 else x + sections[idx - 1]: len(data) if x == 8 else x + sections[idx + 1]]
+    print([hex(i) for i in state])
+    for i in range(len(state)):
+        for j in range(8):
+            result.append(kWhirlpoolAcBitMark)
+            if state[i] & (1 << j):
+                result.append(kWhirlpoolAcOneSpace)
+            else:
+                result.append(kWhirlpoolAcZeroSpace)
+    result.append(kWhirlpoolAcBitMark)
+    result.append(kWhirlpoolAcGap)
   return result
 
-pulse_array.extend(pulse_codes(bytearray(ac)[:6]))
-pulse_array.extend(pulse_codes(bytearray(ac)[6:14]))
-pulse_array.extend(pulse_codes(bytearray(ac)[14:21]))
 
-# print(pulse_array)
+pulse_array.extend(generate_array(bytes(ac)))
+
+print(pulse_array)
 
 # print([hex(bytes(ac)[i]) for i in range(21)])
 
@@ -348,3 +345,33 @@ pulse_array.extend(pulse_codes(bytearray(ac)[14:21]))
 # device.auth()
 
 # device.send_data(bytes.fromhex(hex))
+
+def matchPulse(measured, expected):
+    return (measured >= max(int(expected * (1.0 - 50 / 100.0)), 0) and measured <= (int(expected * (1.0 + 50 / 100.0)) + 1))
+
+def decode(pulsearray, bytes):
+    result = bytearray(bytes)
+    # result = bitarray()
+    gen = iter(pulsearray)
+
+    while next(gen) != kWhirlpoolAcHdrMark or next(gen) != kWhirlpoolAcHdrSpace:
+        return False
+
+    # Read bit
+    for i in range(bytes):
+        for j in range(8):
+            bit_mark = next(gen)
+            bit_space = next(gen)
+            if i == 6 or i == 14:
+                if not matchPulse(kWhirlpoolAcBitMark, bit_mark) and not matchPulse(kWhirlpoolAcGap, bit_space):
+                    return False
+                elif matchPulse(kWhirlpoolAcBitMark, bit_mark) and matchPulse(kWhirlpoolAcGap, bit_space):
+                    bit_mark = next(gen)
+                    bit_space = next(gen)
+            if matchPulse(kWhirlpoolAcBitMark, bit_mark) and matchPulse(kWhirlpoolAcOneSpace, bit_space):
+                # print("TRUE", i, j, bit_mark, bit_space)
+                result[i] |= 1 << j
+            elif not matchPulse(kWhirlpoolAcBitMark, bit_mark) and matchPulse(kWhirlpoolAcZeroSpace, bit_space):
+                print(f"Byte {i} bit {j} fail")
+                return False
+    return result
